@@ -18,17 +18,39 @@ on:
 
 jobs:
   setup-rdp:
-    runs-on: windows-latest # Anda bisa mengubahnya ke ubuntu-latest jika diperlukan
+    runs-on: windows-latest
+    # Menentukan batas waktu maksimum (6 jam = 360 menit)
+    timeout-minutes: 360 
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Proses Konfigurasi Input
+      - name: Inisialisasi Data
         run: |
           echo "Username berhasil diterima: ${{ github.event.inputs.user }}"
-          # Variabel di bawah ini bisa digunakan untuk skrip instalasi Tailscale/RDP Anda
         env:
           TAILSCALE_KEY: ${{ github.event.inputs.tailscale_key }}
           RDP_USER: ${{ github.event.inputs.user }}
           RDP_PASS: ${{ github.event.inputs.password }}
+
+      # ========================================================
+      # MASUKKAN PERINTAH/SCRIPT SETUP RDP & TAILSCALE DI SINI
+      # ========================================================
+
+      - name: Jaga Runner Tetap Aktif (Keep-Alive Loop)
+        run: |
+          echo "Mulai menjaga runner tetap aktif..."
+          # Perintah PowerShell ini akan melakukan delay/pembekuan proses
+          # dalam loop agar job tidak selesai dan tetap dalam status Running.
+          $timeoutHours = 5.8
+          $sleepIntervalSeconds = 60
+          $totalSeconds = [math]::Round($timeoutHours * 3600)
+          $elapsed = 0
+
+          while ($elapsed -lt $totalSeconds) {
+              Start-Sleep -Seconds $sleepIntervalSeconds
+              $elapsed += $sleepIntervalSeconds
+              # Output log berkala agar GitHub tidak menganggap runner hang/idle
+              Write-Output "Runner masih aktif... (Berjalan: $([math]::Round($elapsed / 60)) menit)"
+          }
