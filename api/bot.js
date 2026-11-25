@@ -1,212 +1,258 @@
 const { Telegraf, Markup } = require('telegraf');
-const zlib = require('zlib');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// Gambar Banner Landscape (Rasio 16:9 - ganti dengan URL gambar banner milikmu sendiri)
+const BANNER = {
+  UTAMA: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1280&auto=format&fit=crop',
+  KAT_A: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=1280&auto=format&fit=crop',
+  KAT_B: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1280&auto=format&fit=crop',
+  KAT_C: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1280&auto=format&fit=crop'
+};
+
+// Helper pembuat blok kategori agar tampil lebar, rapi, dan mudah dibaca di layar HP
+const buatBlokKategori = ({ judul, badge, ringkasan, daftarBlok, footer }) => {
+  const isiBlok = daftarBlok
+    .map(
+      (item, idx) =>
+        `┌──────────────────────────┐\n` +
+        `│ <b>[0${idx + 1}] ${item.nama}</b>\n` +
+        `├──────────────────────────┤\n` +
+        `│ ${item.detail}\n` +
+        `│ <i>Status: ${item.status}</i>\n` +
+        `└──────────────────────────┘`
+    )
+    .join('\n');
+
+  return (
+    `⚡ <b>${judul}</b>\n` +
+    `🏷️ <code>${badge}</code>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `${ringkasan}\n\n` +
+    `${isiBlok}\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `📌 <i>${footer}</i>`
+  );
+};
+
 // ==========================================
-// GENERATOR GAMBAR PNG BLOK LANDSCAPE (MURNI KODE)
-// Ukuran: 800 x 360 px (Landscape) dengan 3 Blok Visual
+// 1. MENU UTAMA + BLOK KATEGORI (/start)
 // ==========================================
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) {
-    c ^= buf[i];
-    for (let k = 0; k < 8; k++) {
-      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    }
-  }
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function pngChunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length, 0);
-  const t = Buffer.from(type, 'ascii');
-  const crcBuf = Buffer.concat([t, data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(crcBuf), 0);
-  return Buffer.concat([len, t, data, crc]);
-}
-
-function buatBannerBlokPNG({ levelBaterai = 85 }) {
-  const width = 800;
-  const height = 360;
-  const raw = Buffer.alloc((width * 3 + 1) * height);
-
-  const setPx = (x, y, r, g, b) => {
-    if (x < 0 || x >= width || y < 0 || y >= height) return;
-    const idx = y * (width * 3 + 1) + 1 + x * 3;
-    raw[idx] = r;
-    raw[idx + 1] = g;
-    raw[idx + 2] = b;
-  };
-
-  const fillRect = (x0, y0, w, h, r, g, b) => {
-    for (let y = y0; y < y0 + h; y++) {
-      for (let x = x0; x < x0 + w; x++) {
-        setPx(x, y, r, g, b);
+const getMenuUtama = (namaUser) => {
+  const caption = buatBlokKategori({
+    judul: 'PUSAT KATEGORI & LAYANAN',
+    badge: 'SYSTEM ONLINE • 24/7 VERCEL',
+    ringkasan: `Halo <b>${namaUser}</b>! Pilih blok kategori di bawah untuk melihat rincian layanan & fitur:`,
+    daftarBlok: [
+      {
+        nama: 'KATEGORI 01 • LAYANAN & PRODUK',
+        detail: 'Daftar paket, layanan utama & akses cepat',
+        status: 'Tersedia'
+      },
+      {
+        nama: 'KATEGORI 02 • FITUR & TOOLS',
+        detail: 'Utilitas otomatis, cek info & kontrol bot',
+        status: 'Aktif'
+      },
+      {
+        nama: 'KATEGORI 03 • INFO & BANTUAN',
+        detail: 'Status server, panduan & kontak langsung',
+        status: 'Siap Bantu'
       }
-    }
-  };
-
-  const drawBorder = (x0, y0, w, h, t, r, g, b) => {
-    fillRect(x0, y0, w, t, r, g, b);
-    fillRect(x0, y0 + h - t, w, t, r, g, b);
-    fillRect(x0, y0, t, h, r, g, b);
-    fillRect(x0 + w - t, y0, t, h, r, g, b);
-  };
-
-  // Latar belakang gelap (blok utama)
-  fillRect(0, 0, width, height, 15, 20, 32);
-
-  // Blok 1: INFO AKUN (Kiri) - Cyan
-  fillRect(30, 50, 230, 260, 24, 34, 52);
-  drawBorder(30, 50, 230, 260, 3, 0, 229, 255);
-  fillRect(45, 70, 200, 12, 0, 229, 255); // Header bar
-  fillRect(45, 100, 150, 8, 148, 163, 184);
-  fillRect(45, 120, 180, 8, 148, 163, 184);
-
-  // Blok 2: NAMA & PROFIL (Tengah) - Magenta/Ungu
-  fillRect(285, 50, 230, 260, 24, 34, 52);
-  drawBorder(285, 50, 230, 260, 3, 236, 72, 153);
-  fillRect(300, 70, 200, 12, 236, 72, 153); // Header bar
-  fillRect(300, 100, 165, 8, 148, 163, 184);
-  fillRect(300, 120, 130, 8, 148, 163, 184);
-
-  // Blok 3: BATERAI / POWER (Kanan) - Hijau/Kuning sesuai level
-  fillRect(540, 50, 230, 260, 24, 34, 52);
-  const batColor = levelBaterai >= 50 ? [34, 197, 94] : levelBaterai >= 20 ? [250, 204, 21] : [239, 68, 68];
-  drawBorder(540, 50, 230, 260, 3, batColor[0], batColor[1], batColor[2]);
-  fillRect(555, 70, 200, 12, batColor[0], batColor[1], batColor[2]);
-
-  // Indikator bar baterai di dalam Blok 3
-  drawBorder(565, 115, 180, 50, 3, 226, 232, 240);
-  fillRect(745, 130, 10, 20, 226, 232, 240); // Kepala baterai
-  const barWidth = Math.max(8, Math.round((170 * Math.min(100, Math.max(0, levelBaterai))) / 100));
-  fillRect(570, 120, barWidth, 40, batColor[0], batColor[1], batColor[2]);
-
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // color type: RGB
-
-  const compressed = zlib.deflateSync(raw);
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-
-  return Buffer.concat([
-    signature,
-    pngChunk('IHDR', ihdr),
-    pngChunk('IDAT', compressed),
-    pngChunk('IEND', Buffer.alloc(0))
-  ]);
-}
-
-// ==========================================
-// DATA BLOK KONTEN (INFO AKUN, NAMA, BATERAI, DLL)
-// ==========================================
-function getBlokData(ctx, baterai = 85) {
-  const nama = [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') || 'Pengguna';
-  const username = ctx.from.username ? `@${ctx.from.username}` : 'Tidak ada username';
-  const userId = ctx.from.id;
-  const waktu = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-
-  const blokInfoAkun =
-    `🔹 <b>[BLOK 1 • INFO AKUN]</b>\n` +
-    `• ID Akun: <code>${userId}</code>\n` +
-    `• Username: <code>${username}</code>\n` +
-    `• Mode: <code>Vercel Webhook 24/7</code>`;
-
-  const blokNama =
-    `🔹 <b>[BLOK 2 • NAMA & PROFIL]</b>\n` +
-    `• Nama: <b>${nama}</b>\n` +
-    `• Bahasa: <code>${ctx.from.language_code || 'id'}</code>`;
-
-  const blokBaterai =
-    `🔹 <b>[BLOK 3 • BATERAI & STATUS]</b>\n` +
-    `• Baterai: <b>${baterai}%</b> ${baterai >= 50 ? '🔋' : baterai >= 20 ? '🪫' : '⚠️'}\n` +
-    `• Update: <code>${waktu} WIB</code>`;
-
-  const caption = `${blokInfoAkun}\n\n${blokNama}\n\n${blokBaterai}`;
+    ],
+    footer: 'Tampilan otomatis diperbarui di satu layar tanpa spam.'
+  });
 
   const keyboard = Markup.inlineKeyboard([
     [
-      Markup.button.callback('👤 Blok Info Akun', 'fokus_akun'),
-      Markup.button.callback('🏷️ Blok Nama', 'fokus_nama'),
-      Markup.button.callback('🔋 Blok Baterai', 'fokus_baterai')
+      Markup.button.callback('📦 Blok 01: Layanan', 'blok_01'),
+      Markup.button.callback('🛠️ Blok 02: Fitur', 'blok_02')
     ],
     [
-      Markup.button.callback('⚡ Simulasi Baterai -20%', 'sim_kurang'),
-      Markup.button.callback('🔌 Charge Baterai 100%', 'sim_charge')
+      Markup.button.callback('📡 Blok 03: Info & Status', 'blok_03'),
+      Markup.button.callback('🔄 Refresh', 'blok_home')
     ],
     [
-      Markup.button.callback('📋 Tampilkan Semua Blok', 'semua_blok')
+      Markup.button.url('💬 Chat Admin', 'https://t.me/username_kamu')
     ]
   ]);
 
-  return { caption, keyboard, blokInfoAkun, blokNama, blokBaterai };
-}
+  return { caption, keyboard };
+};
 
-// Simpan level baterai simulasi per chatId di memori proses
-const stateBaterai = new Map();
-const getBaterai = (chatId) => (stateBaterai.has(chatId) ? stateBaterai.get(chatId) : 85);
-
-// ==========================================
-// /start -> KIRIM BANNER BLOK PNG + SEMUA BLOK
-// ==========================================
 bot.start(async (ctx) => {
-  const bat = getBaterai(ctx.chat.id);
-  const { caption, keyboard } = getBlokData(ctx, bat);
-  const imgBuffer = buatBannerBlokPNG({ levelBaterai: bat });
+  const nama = ctx.from.first_name || 'User';
+  const { caption, keyboard } = getMenuUtama(nama);
 
-  await ctx.replyWithPhoto(
-    { source: imgBuffer, filename: 'blok-panel.png' },
-    { caption, parse_mode: 'HTML', ...keyboard }
-  );
+  await ctx.replyWithPhoto(BANNER.UTAMA, {
+    caption,
+    parse_mode: 'HTML',
+    ...keyboard
+  });
 });
 
-// Fokus ke salah satu blok saja (meng-edit foto & caption di pesan yang sama)
-bot.action(['fokus_akun', 'fokus_nama', 'fokus_baterai', 'semua_blok'], async (ctx) => {
-  await ctx.answerCbQuery();
-  const bat = getBaterai(ctx.chat.id);
-  const data = getBlokData(ctx, bat);
-  const imgBuffer = buatBannerBlokPNG({ levelBaterai: bat });
-
-  let captionBaru = data.caption;
-  if (ctx.match[0] === 'fokus_akun') captionBaru = data.blokInfoAkun;
-  if (ctx.match[0] === 'fokus_nama') captionBaru = data.blokNama;
-  if (ctx.match[0] === 'fokus_baterai') captionBaru = data.blokBaterai;
+// Kembali ke Menu Utama
+bot.action('blok_home', async (ctx) => {
+  await ctx.answerCbQuery('Memuat menu utama...');
+  const nama = ctx.from.first_name || 'User';
+  const { caption, keyboard } = getMenuUtama(nama);
 
   await ctx.editMessageMedia(
     {
       type: 'photo',
-      media: { source: imgBuffer, filename: 'blok-panel.png' },
-      caption: captionBaru,
-      parse_mode: 'HTML'
-    },
-    data.keyboard
-  );
-});
-
-// Simulasi ubah level baterai (memperbarui bar baterai di gambar PNG & teks)
-bot.action(['sim_kurang', 'sim_charge'], async (ctx) => {
-  await ctx.answerCbQuery();
-  const current = getBaterai(ctx.chat.id);
-  const nextBat = ctx.match[0] === 'sim_charge' ? 100 : Math.max(5, current - 20);
-  stateBaterai.set(ctx.chat.id, nextBat);
-
-  const { caption, keyboard } = getBlokData(ctx, nextBat);
-  const imgBuffer = buatBannerBlokPNG({ levelBaterai: nextBat });
-
-  await ctx.editMessageMedia(
-    {
-      type: 'photo',
-      media: { source: imgBuffer, filename: 'blok-panel.png' },
+      media: BANNER.UTAMA,
       caption,
       parse_mode: 'HTML'
     },
     keyboard
   );
+});
+
+// ==========================================
+// 2. DETAIL BLOK KATEGORI 01 (LAYANAN)
+// ==========================================
+bot.action('blok_01', async (ctx) => {
+  await ctx.answerCbQuery();
+  const caption = buatBlokKategori({
+    judul: 'BLOK KATEGORI 01 • LAYANAN',
+    badge: 'KATALOG UTAMA',
+    ringkasan: 'Pilih item di bawah untuk melihat informasi lengkap:',
+    daftarBlok: [
+      {
+        nama: 'Paket Standar',
+        detail: 'Akses dasar dengan respon cepat & stabil',
+        status: 'Ready'
+      },
+      {
+        nama: 'Paket Prioritas',
+        detail: 'Akses penuh dengan dukungan lanjutan',
+        status: 'Ready'
+      }
+    ],
+    footer: 'Klik tombol di bawah untuk detail item atau kembali.'
+  });
+
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🔹 Detail Standar', 'info_standar'),
+      Markup.button.callback('🔸 Detail Prioritas', 'info_prioritas')
+    ],
+    [Markup.button.callback('⬅️ Kembali ke Semua Blok', 'blok_home')]
+  ]);
+
+  await ctx.editMessageMedia(
+    {
+      type: 'photo',
+      media: BANNER.KAT_A,
+      caption,
+      parse_mode: 'HTML'
+    },
+    keyboard
+  );
+});
+
+// ==========================================
+// 3. DETAIL BLOK KATEGORI 02 (FITUR)
+// ==========================================
+bot.action('blok_02', async (ctx) => {
+  await ctx.answerCbQuery();
+  const caption = buatBlokKategori({
+    judul: 'BLOK KATEGORI 02 • FITUR',
+    badge: 'AUTOMATION & TOOLS',
+    ringkasan: 'Fitur aktif yang bisa langsung kamu coba:',
+    daftarBlok: [
+      {
+        nama: 'Cek Latensi / Ping',
+        detail: 'Menguji respon webhook & koneksi server',
+        status: 'Online'
+      },
+      {
+        nama: 'Cek Profil & ID',
+        detail: 'Menampilkan ID akun Telegram & waktu server',
+        status: 'Online'
+      }
+    ],
+    footer: 'Hasil pengecekan akan muncul sebagai notifikasi pop-up.'
+  });
+
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback('⚡ Tes Ping', 'tes_ping'),
+      Markup.button.callback('🆔 Cek ID Saya', 'cek_id')
+    ],
+    [Markup.button.callback('⬅️ Kembali ke Semua Blok', 'blok_home')]
+  ]);
+
+  await ctx.editMessageMedia(
+    {
+      type: 'photo',
+      media: BANNER.KAT_B,
+      caption,
+      parse_mode: 'HTML'
+    },
+    keyboard
+  );
+});
+
+// ==========================================
+// 4. DETAIL BLOK KATEGORI 03 (INFO & STATUS)
+// ==========================================
+bot.action('blok_03', async (ctx) => {
+  await ctx.answerCbQuery();
+  const waktuWIB = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+  const caption = buatBlokKategori({
+    judul: 'BLOK KATEGORI 03 • INFO SERVER',
+    badge: 'DIAGNOSTICS & HELP',
+    ringkasan: 'Informasi operasional bot saat ini:',
+    daftarBlok: [
+      {
+        nama: 'Status Layanan',
+        detail: 'Webhook Vercel aktif & menerima update',
+        status: '24/7 Aktif'
+      },
+      {
+        nama: 'Waktu Server',
+        detail: `${waktuWIB} WIB`,
+        status: 'Sinkron'
+      }
+    ],
+    footer: 'Jika butuh bantuan khusus, gunakan tombol Chat Admin.'
+  });
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🔄 Perbarui Status', 'blok_03')],
+    [Markup.button.callback('⬅️ Kembali ke Semua Blok', 'blok_home')]
+  ]);
+
+  await ctx.editMessageMedia(
+    {
+      type: 'photo',
+      media: BANNER.KAT_C,
+      caption,
+      parse_mode: 'HTML'
+    },
+    keyboard
+  );
+});
+
+// ==========================================
+// 5. AKSI TOMBOL DETAIL & UTILITAS
+// ==========================================
+bot.action('info_standar', async (ctx) => {
+  await ctx.answerCbQuery('📦 Paket Standar: Cocok untuk kebutuhan harian dasar.', { show_alert: true });
+});
+
+bot.action('info_prioritas', async (ctx) => {
+  await ctx.answerCbQuery('👑 Paket Prioritas: Akses fitur lengkap & respon prioritas.', { show_alert: true });
+});
+
+bot.action('tes_ping', async (ctx) => {
+  await ctx.answerCbQuery('⚡ Server merespons normal via Vercel Webhook!', { show_alert: true });
+});
+
+bot.action('cek_id', async (ctx) => {
+  await ctx.answerCbQuery(`🆔 ID Telegram kamu: ${ctx.from.id}`, { show_alert: true });
 });
 
 // ==========================================
@@ -218,7 +264,7 @@ module.exports = async (req, res) => {
       await bot.handleUpdate(req.body);
       res.status(200).send('OK');
     } else {
-      res.status(200).send('Bot Blok Dinamis Aktif 24 Jam di Vercel!');
+      res.status(200).send('Bot Telegram Aktif 24 Jam di Vercel!');
     }
   } catch (err) {
     console.error('Webhook Error:', err);
