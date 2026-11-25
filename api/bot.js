@@ -1,8 +1,17 @@
 const Groq = require("groq-sdk");
 const fetch = require("node-fetch");
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+// =========================================================================
+// KONFIGURASI TOKEN TELEGRAM & GROQ API
+// Prioritas membaca Environment Variables Vercel; jika kosong, pakai fallback
+// string di bawah (atau isi langsung di sini kalau mau serba satu file).
+// =========================================================================
+const TELEGRAM_TOKEN =
+  process.env.TELEGRAM_BOT_TOKEN || "9187066776:AAFi4jwXyZjnAqJ5I7Vaqeg67VYri2--uzg";
+
+const GROQ_API_KEY =
+  process.env.GROQ_API_KEY || "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";
+
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 const MODEL_CANDIDATES = [
@@ -21,13 +30,13 @@ const groq = new Groq({
 const chatMemory = new Map();
 const MAX_HISTORY = 14;
 
-// Kamu bisa sesuaikan daftar paket, harga, dan kontak admin di sini
+// Sesuaikan katalog paket, harga, pembayaran, dan kontak admin kamu di sini
 const RDP_CATALOG_INFO = `
 Informasi Layanan RDP:
-- OS: Windows 10 / Windows 11 / Windows Server (sesuai paket tersedia).
-- Kegunaan umum: Remote kerja, browser/automation ringan, bot/trading, upload/download, atau kebutuhan server harian.
-- Paket & Harga: Silakan sesuaikan daftar paket/durasi (misalnya Harian, Mingguan, Bulanan) serta detail RAM/vCPU/Storage dan metode pembayaran di katalog resmi atau langsung tanyakan ke admin.
-- Aturan pemakaian: Dilarang keras dipakai untuk aktivitas ilegal, DDoS, mining berat di luar ketentuan paket, atau pelanggaran ToS penyedia.
+- Sistem Operasi: Windows 10 / Windows 11 / Windows Server (sesuai ketersediaan).
+- Kebutuhan Umum: Remote kerja, browser/automation ringan, bot/trading, akses aplikasi, atau server harian.
+- Paket & Durasi: Harian, Mingguan, dan Bulanan (sesuaikan dengan daftar harga & stok aktif).
+- Aturan Pemakaian: Dilarang keras dipakai untuk aktivitas ilegal, serangan DDoS, mining berat di luar ketentuan paket, atau pelanggaran ToS penyedia.
 `;
 
 const SYSTEM_PROMPT = `
@@ -44,7 +53,7 @@ ${RDP_CATALOG_INFO}
 `;
 
 async function sendTelegramMessage(chatId, text) {
-  if (!TELEGRAM_TOKEN) return;
+  if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN.startsWith("ISI_")) return;
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -56,7 +65,7 @@ async function sendTelegramMessage(chatId, text) {
 }
 
 async function sendTyping(chatId) {
-  if (!TELEGRAM_TOKEN) return;
+  if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN.startsWith("ISI_")) return;
   await fetch(`${TELEGRAM_API}/sendChatAction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -112,7 +121,7 @@ module.exports = async (req, res) => {
   if (req.method === "GET") {
     return res
       .status(200)
-      .send("Bot Jualan RDP aktif 24/7 via Vercel Webhook.");
+      .send("Bot Jualan RDP aktif via Vercel HTTP Function (/api/bot).");
   }
 
   if (req.method !== "POST") {
@@ -132,11 +141,15 @@ module.exports = async (req, res) => {
     chatId = message.chat.id;
     const text = message.text.trim();
 
+    if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN.startsWith("ISI_")) {
+      return res.status(200).json({ ok: true });
+    }
+
     if (text === "/start") {
       chatMemory.delete(chatId);
       await sendTelegramMessage(
         chatId,
-        "Halo! Selamat datang di layanan RDP.\n\nSilakan ketik kebutuhan kamu:\n• /paket — Info paket & spesifikasi RDP\n• /order — Cara pemesanan & pembayaran\n• /reset — Hapus riwayat obrolan\n\nAtau langsung tulis spesifikasi/kebutuhan RDP yang sedang kamu cari."
+        "Halo! Selamat datang di layanan RDP.\n\nSilakan pilih menu atau tulis kebutuhan kamu:\n• /paket — Info paket & spesifikasi RDP\n• /order — Cara pemesanan & pembayaran\n• /reset — Hapus riwayat obrolan\n\nAtau langsung tanyakan spesifikasi, durasi, dan kebutuhan RDP yang kamu cari."
       );
       return res.status(200).json({ ok: true });
     }
@@ -144,7 +157,7 @@ module.exports = async (req, res) => {
     if (text === "/paket") {
       await sendTelegramMessage(
         chatId,
-        "Informasi Paket RDP:\n• Sistem Operasi: Windows / Server (sesuai ketersediaan)\n• Durasi: Harian / Mingguan / Bulanan (sesuaikan dengan daftar paketmu)\n• Kebutuhan: Remote kerja, aplikasi/bot, akses browser, atau server harian\n\nSebutkan kebutuhan RAM, CPU, durasi, dan OS yang kamu cari agar bisa dibantu arahkan."
+        "Informasi Paket RDP:\n• Sistem Operasi: Windows / Server (sesuai ketersediaan)\n• Durasi: Harian / Mingguan / Bulanan\n• Penggunaan: Remote kerja, browser/automation ringan, bot/trading, atau server harian\n\nSebutkan spesifikasi (RAM, vCPU, storage, OS) dan durasi yang kamu perlukan agar dibantu arahkan."
       );
       return res.status(200).json({ ok: true });
     }
@@ -152,7 +165,7 @@ module.exports = async (req, res) => {
     if (text === "/order") {
       await sendTelegramMessage(
         chatId,
-        "Alur Order RDP:\n1. Tentukan paket/spesifikasi dan durasi sewa yang dibutuhkan.\n2. Konfirmasi ketersediaan stok dan metode pembayaran.\n3. Lakukan pembayaran dan kirim bukti transfer.\n4. Detail akses RDP (IP, Username, Password) akan diproses setelah pembayaran terverifikasi."
+        "Alur Order RDP:\n1. Tentukan paket/spesifikasi dan durasi sewa yang dibutuhkan.\n2. Konfirmasi ketersediaan stok dan metode pembayaran.\n3. Lakukan pembayaran lalu kirim bukti transfer.\n4. Akun/akses RDP diproses setelah pembayaran terverifikasi."
       );
       return res.status(200).json({ ok: true });
     }
@@ -166,10 +179,10 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    if (!GROQ_API_KEY) {
+    if (!GROQ_API_KEY || GROQ_API_KEY.startsWith("ISI_")) {
       await sendTelegramMessage(
         chatId,
-        "Konfigurasi GROQ_API_KEY belum terbaca di Environment Variables Vercel."
+        "GROQ_API_KEY belum diisi pada konfigurasi bot."
       );
       return res.status(200).json({ ok: true });
     }
