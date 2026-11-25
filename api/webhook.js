@@ -3,13 +3,23 @@ const fetch = require("node-fetch");
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+
+// Urutan model dicoba satu per satu dari atas ke bawah jika ada yang gagal/404/rate-limit
+const MODEL_CANDIDATES = [
+  process.env.GROQ_MODEL,
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3-32b",
+].filter(Boolean);
 
 const groq = new Groq({
   apiKey: GROQ_API_KEY,
 });
 
+// Riwayat chat sederhana per chat_id (reset jika serverless cold start)
 const chatMemory = new Map();
 const MAX_HISTORY = 14;
 
@@ -64,11 +74,38 @@ function saveUserHistory(chatId, userMsg, assistantMsg) {
   }
 }
 
+async function generateReplyWithFallback(messages) {
+  let lastError = null;
+
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: modelName,
+        temperature: 0.85,
+        max_tokens: 500,
+        messages,
+      });
+
+      const content = completion.choices?.[0]?.message?.content?.trim();
+      if (content) {
+        return { reply: content, usedModel: modelName };
+      }
+    } catch (err) {
+      lastError = err;
+      console.error(`Model ${modelName} gagal:`, err?.message || err);
+    }
+  }
+
+  throw lastError || new Error("Semua kandidat model gagal merespons");
+}
+
 module.exports = async (req, res) => {
   if (req.method === "GET") {
     return res
       .status(200)
-      .send(`Bot aktif 24/7 via Vercel Webhook! Model: ${GROQ_MODEL} ✨`);
+      .send(
+        `Bot aktif 24/7 via Vercel Webhook! Kandidat model: ${MODEL_CANDIDATES.join(", ")} ✨`
+      );
   }
 
   if (req.method !== "POST") {
@@ -117,20 +154,11 @@ module.exports = async (req, res) => {
     await sendTyping(chatId);
 
     const history = getUserHistory(chatId);
-    const completion = await groq.chat.completions.create({
-      model: GROQ_MODEL,
-      temperature: 0.85,
-      max_tokens: 500,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...history,
-        { role: "user", content: text },
-      ],
-    });
-
-    const reply =
-      completion.choices?.[0]?.message?.content?.trim() ||
-      "Ish, aku lagi nge-blank dikit nih 🥺 Coba ulangi lagi dong!";
+    const { reply } = await generateReplyWithFallback([
+      { role: "system", content: SYSTEM_PROMPT },
+      ...history,
+      { role: "user", content: text },
+    ]);
 
     saveUserHistory(chatId, text, reply);
     await sendTelegramMessage(chatId, reply);
@@ -141,7 +169,7 @@ module.exports = async (req, res) => {
     if (chatId) {
       await sendTelegramMessage(
         chatId,
-        `Huhu ada error pas manggil Groq (${GROQ_MODEL}): ${err?.message || "unknown error"} 🥺`
+        `Huhu semua model Groq lagi bermasalah nih 🥺 (${err?.message || "unknown error"})`
       );
     }
     return res.status(200).json({ ok: true });
