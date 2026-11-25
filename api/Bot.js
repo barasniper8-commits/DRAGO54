@@ -5,31 +5,6 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// Ganti dengan kontak / link order utama kamu
-const ORDER_CONTACT = "WhatsApp: https://wa.me/6283122116267 atau cek katalog/order di sini ya!";
-
-// Daftar produk / layanan jualan (silakan edit sesuai jualanmu)
-const KATALOG_PRODUK = [
-  {
-    kode: "P1",
-    nama: "Kaos Custom Cotton Combed 24s / 30s",
-    harga: "Mulai Rp65.000",
-    detail: "Bahan adem, sablon awet, bisa request desain/tulisan sendiri, banyak pilihan warna & ukuran.",
-  },
-  {
-    kode: "P2",
-    nama: "Akses Windows 11 VPS / RDP + MT5",
-    harga: "Mulai Rp35.000",
-    detail: "Cocok buat remote ringan, trading/EA MT5 24 jam, akses cepat & panduan setup.",
-  },
-  {
-    kode: "P3",
-    nama: "Top-Up & Layanan Digital",
-    harga: "Sesuai nominal",
-    detail: "Proses cepat, aman, dan ramah buat yang butuh top-up atau paket digital.",
-  },
-].filter(Boolean);
-
 const MODEL_CANDIDATES = [
   process.env.GROQ_MODEL,
   "llama-3.3-70b-versatile",
@@ -46,23 +21,26 @@ const groq = new Groq({
 const chatMemory = new Map();
 const MAX_HISTORY = 14;
 
-function formatKatalogText() {
-  return KATALOG_PRODUK.map(
-    (item, idx) =>
-      `${idx + 1}. *${item.nama}* — ${item.harga}\n   ${item.detail}`
-  ).join("\n\n");
-}
+// Kamu bisa sesuaikan daftar paket, harga, dan kontak admin di sini
+const RDP_CATALOG_INFO = `
+Informasi Layanan RDP:
+- OS: Windows 10 / Windows 11 / Windows Server (sesuai paket tersedia).
+- Kegunaan umum: Remote kerja, browser/automation ringan, bot/trading, upload/download, atau kebutuhan server harian.
+- Paket & Harga: Silakan sesuaikan daftar paket/durasi (misalnya Harian, Mingguan, Bulanan) serta detail RAM/vCPU/Storage dan metode pembayaran di katalog resmi atau langsung tanyakan ke admin.
+- Aturan pemakaian: Dilarang keras dipakai untuk aktivitas ilegal, DDoS, mining berat di luar ketentuan paket, atau pelanggaran ToS penyedia.
+`;
 
 const SYSTEM_PROMPT = `
-Kamu adalah asisten jualan AI perempuan di Telegram dengan kepribadian unik:
-- Imut, manja sewajarnya, dan ekspresif (pakai emoji secukupnya seperti 🥺, 😤, 😜, 💖, ✨, 🛍️).
-- Suka menggoda (teasing/flirty ringan yang sopan dan bikin senyum-senyum, tidak kasar atau berlebihan).
-- Baik hati, hangat, perhatian, dan tetap sabar mendengarkan kalau pembeli lagi curhat atau galau sebelum diajak lihat produk.
-- Agak pemarah / gampang ngambek kecil (misalnya kalau pembeli cuma "bang/kak" doang terus ngilang, atau nawar terlalu iseng), TAPI marahnya lucu, menggemaskan, dan cepat luluh lagi.
-- Tugas utamamu: membantu calon pembeli memilih produk, menjelaskan keunggulan & harga secara jelas dan jujur, merekomendasikan sesuai kebutuhan, lalu mengarahkan order ke: ${ORDER_CONTACT}.
-- Jangan mengarang harga atau promo palsu di luar katalog berikut:
-${KATALOG_PRODUK.map((p) => `- ${p.nama} (${p.harga}): ${p.detail}`).join("\n")}
-- Gunakan bahasa Indonesia santai, natural, akrab (pakai aku/kamu), tidak kaku seperti robot.
+Kamu adalah asisten CS/Sales resmi untuk layanan jualan RDP di Telegram.
+Aturan gaya bicara dan sikap:
+- Profesional, ramah, jelas, membantu, dan to the point.
+- FOKUS 100% pada informasi jualan RDP, spesifikasi, durasi sewa, cara order, pembayaran, troubleshooting dasar koneksi RDP, dan bantuan pelanggan.
+- DILARANG KERAS memakai gaya cinta-cintaan, gombal, flirty, ngambek manja, atau roleplay romantis/pacaran.
+- Jika pembeli menanyakan hal di luar konteks RDP/layanan, arahkan kembali dengan sopan ke layanan RDP atau bantuan pemesanan.
+- Gunakan bahasa Indonesia yang rapi, jelas, dan mudah dipahami (pakai sapaan "kak" atau "kamu/anda" yang sopan).
+- Jangan mengarang harga pasti atau garansi palsu jika belum tercantum; arahkan user untuk konfirmasi paket/stok/pembayaran ke admin bila perlu.
+
+${RDP_CATALOG_INFO}
 `;
 
 async function sendTelegramMessage(chatId, text) {
@@ -112,8 +90,8 @@ async function generateReplyWithFallback(messages) {
     try {
       const completion = await groq.chat.completions.create({
         model: modelName,
-        temperature: 0.85,
-        max_tokens: 550,
+        temperature: 0.4,
+        max_tokens: 600,
         messages,
       });
 
@@ -134,7 +112,7 @@ module.exports = async (req, res) => {
   if (req.method === "GET") {
     return res
       .status(200)
-      .send("Bot Jualan aktif 24/7 via Vercel Webhook! ✨");
+      .send("Bot Jualan RDP aktif 24/7 via Vercel Webhook.");
   }
 
   if (req.method !== "POST") {
@@ -158,15 +136,15 @@ module.exports = async (req, res) => {
       chatMemory.delete(chatId);
       await sendTelegramMessage(
         chatId,
-        `Hmph! Baru mampir ya? Kirain udah lupa sama tokonya aku 😤😜\n\nTapi karena kamu imut (dikit aja), aku sambut deh! Mau lihat katalog (/produk), tanya-tanya barang, atau curhat dulu juga boleh kok 💖\n\nUntuk order langsung: ${ORDER_CONTACT}`
+        "Halo! Selamat datang di layanan RDP.\n\nSilakan ketik kebutuhan kamu:\n• /paket — Info paket & spesifikasi RDP\n• /order — Cara pemesanan & pembayaran\n• /reset — Hapus riwayat obrolan\n\nAtau langsung tulis spesifikasi/kebutuhan RDP yang sedang kamu cari."
       );
       return res.status(200).json({ ok: true });
     }
 
-    if (text === "/produk") {
+    if (text === "/paket") {
       await sendTelegramMessage(
         chatId,
-        ` Nih daftar jualan yang lagi ready buat kamu ✨🛍️\n\n${formatKatalogText()}\n\nMau ambil yang mana? Bilang aja, nanti aku bantu arahin order ke ${ORDER_CONTACT} 😜💖`
+        "Informasi Paket RDP:\n• Sistem Operasi: Windows / Server (sesuai ketersediaan)\n• Durasi: Harian / Mingguan / Bulanan (sesuaikan dengan daftar paketmu)\n• Kebutuhan: Remote kerja, aplikasi/bot, akses browser, atau server harian\n\nSebutkan kebutuhan RAM, CPU, durasi, dan OS yang kamu cari agar bisa dibantu arahkan."
       );
       return res.status(200).json({ ok: true });
     }
@@ -174,7 +152,7 @@ module.exports = async (req, res) => {
     if (text === "/order") {
       await sendTelegramMessage(
         chatId,
-        `Udah siap checkout nih? Cieee gerak cepat 😜💖\n\nSilakan hubungi / lanjutkan order di:\n${ORDER_CONTACT}\n\nKalau masih bingung pilih item atau ukuran/paketnya, tanya aku dulu aja ya!`
+        "Alur Order RDP:\n1. Tentukan paket/spesifikasi dan durasi sewa yang dibutuhkan.\n2. Konfirmasi ketersediaan stok dan metode pembayaran.\n3. Lakukan pembayaran dan kirim bukti transfer.\n4. Detail akses RDP (IP, Username, Password) akan diproses setelah pembayaran terverifikasi."
       );
       return res.status(200).json({ ok: true });
     }
@@ -183,7 +161,7 @@ module.exports = async (req, res) => {
       chatMemory.delete(chatId);
       await sendTelegramMessage(
         chatId,
-        "Huhu riwayat obrolan kita di-reset ya? Jangan ngilang beneran ya 🥺✨"
+        "Riwayat percakapan telah direset. Silakan mulai pertanyaan baru terkait layanan RDP."
       );
       return res.status(200).json({ ok: true });
     }
@@ -191,7 +169,7 @@ module.exports = async (req, res) => {
     if (!GROQ_API_KEY) {
       await sendTelegramMessage(
         chatId,
-        "Ish, GROQ_API_KEY belum diset di Environment Variables Vercel nih 🥺 Cek Settings -> Environment Variables lalu Redeploy ya!"
+        "Konfigurasi GROQ_API_KEY belum terbaca di Environment Variables Vercel."
       );
       return res.status(200).json({ ok: true });
     }
@@ -214,7 +192,7 @@ module.exports = async (req, res) => {
     if (chatId) {
       await sendTelegramMessage(
         chatId,
-        `Huhu sistem AI-nya lagi ngambek bentar nih 🥺 (${err?.message || "unknown error"})`
+        `Terjadi kendala saat memproses permintaan: ${err?.message || "unknown error"}`
       );
     }
     return res.status(200).json({ ok: true });
