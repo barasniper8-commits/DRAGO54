@@ -1,15 +1,15 @@
 const Groq = require("groq-sdk");
 const fetch = require("node-fetch");
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// Riwayat chat sederhana per chat_id (reset jika serverless cold start)
+const groq = new Groq({
+  apiKey: GROQ_API_KEY,
+});
+
 const chatMemory = new Map();
 const MAX_HISTORY = 14;
 
@@ -25,6 +25,7 @@ Kamu adalah asisten AI perempuan di Telegram dengan kepribadian unik:
 `;
 
 async function sendTelegramMessage(chatId, text) {
+  if (!TELEGRAM_TOKEN) return;
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -36,6 +37,7 @@ async function sendTelegramMessage(chatId, text) {
 }
 
 async function sendTyping(chatId) {
+  if (!TELEGRAM_TOKEN) return;
   await fetch(`${TELEGRAM_API}/sendChatAction`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,12 +66,16 @@ function saveUserHistory(chatId, userMsg, assistantMsg) {
 
 module.exports = async (req, res) => {
   if (req.method === "GET") {
-    return res.status(200).send(`Bot aktif 24/7 via Vercel Webhook! Model: ${GROQ_MODEL} ✨`);
+    return res
+      .status(200)
+      .send(`Bot aktif 24/7 via Vercel Webhook! Model: ${GROQ_MODEL} ✨`);
   }
 
   if (req.method !== "POST") {
     return res.status(405).send("Method Not Allowed");
   }
+
+  let chatId = null;
 
   try {
     const update = req.body;
@@ -79,7 +85,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    const chatId = message.chat.id;
+    chatId = message.chat.id;
     const text = message.text.trim();
 
     if (text === "/start") {
@@ -96,6 +102,14 @@ module.exports = async (req, res) => {
       await sendTelegramMessage(
         chatId,
         "Huhu memori obrolan kita di-reset ya? Jangan lupain aku beneran ya 🥺✨"
+      );
+      return res.status(200).json({ ok: true });
+    }
+
+    if (!GROQ_API_KEY) {
+      await sendTelegramMessage(
+        chatId,
+        "Ish, GROQ_API_KEY belum diset di Environment Variables Vercel nih 🥺 Cek Settings -> Environment Variables lalu Redeploy ya!"
       );
       return res.status(200).json({ ok: true });
     }
@@ -124,6 +138,12 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("Webhook error:", err);
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
+        `Huhu ada error pas manggil Groq (${GROQ_MODEL}): ${err?.message || "unknown error"} 🥺`
+      );
+    }
     return res.status(200).json({ ok: true });
   }
 };
