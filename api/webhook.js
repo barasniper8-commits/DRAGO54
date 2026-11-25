@@ -5,6 +5,7 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
@@ -63,7 +64,7 @@ function saveUserHistory(chatId, userMsg, assistantMsg) {
 
 module.exports = async (req, res) => {
   if (req.method === "GET") {
-    return res.status(200).send("Bot aktif 24/7 via Vercel Webhook! ✨");
+    return res.status(200).send(`Bot aktif 24/7 via Vercel Webhook! Model: ${GROQ_MODEL} ✨`);
   }
 
   if (req.method !== "POST") {
@@ -103,7 +104,7 @@ module.exports = async (req, res) => {
 
     const history = getUserHistory(chatId);
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       temperature: 0.85,
       max_tokens: 500,
       messages: [
