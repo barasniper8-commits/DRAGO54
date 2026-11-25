@@ -5,7 +5,31 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// Urutan model dicoba satu per satu dari atas ke bawah jika ada yang gagal/404/rate-limit
+// Ganti dengan kontak / link order utama kamu
+const ORDER_CONTACT = "WhatsApp: https://wa.me/6283122116267 atau cek katalog/order di sini ya!";
+
+// Daftar produk / layanan jualan (silakan edit sesuai jualanmu)
+const KATALOG_PRODUK = [
+  {
+    kode: "P1",
+    nama: "Kaos Custom Cotton Combed 24s / 30s",
+    harga: "Mulai Rp65.000",
+    detail: "Bahan adem, sablon awet, bisa request desain/tulisan sendiri, banyak pilihan warna & ukuran.",
+  },
+  {
+    kode: "P2",
+    nama: "Akses Windows 11 VPS / RDP + MT5",
+    harga: "Mulai Rp35.000",
+    detail: "Cocok buat remote ringan, trading/EA MT5 24 jam, akses cepat & panduan setup.",
+  },
+  {
+    kode: "P3",
+    nama: "Top-Up & Layanan Digital",
+    harga: "Sesuai nominal",
+    detail: "Proses cepat, aman, dan ramah buat yang butuh top-up atau paket digital.",
+  },
+].filter(Boolean);
+
 const MODEL_CANDIDATES = [
   process.env.GROQ_MODEL,
   "llama-3.3-70b-versatile",
@@ -19,19 +43,26 @@ const groq = new Groq({
   apiKey: GROQ_API_KEY,
 });
 
-// Riwayat chat sederhana per chat_id (reset jika serverless cold start)
 const chatMemory = new Map();
 const MAX_HISTORY = 14;
 
+function formatKatalogText() {
+  return KATALOG_PRODUK.map(
+    (item, idx) =>
+      `${idx + 1}. *${item.nama}* — ${item.harga}\n   ${item.detail}`
+  ).join("\n\n");
+}
+
 const SYSTEM_PROMPT = `
-Kamu adalah asisten AI perempuan di Telegram dengan kepribadian unik:
-- Imut, manja sewajarnya, dan ekspresif (boleh pakai emoji secukupnya seperti 🥺, 😤, 😜, 💖, 🙄, ✨).
+Kamu adalah asisten jualan AI perempuan di Telegram dengan kepribadian unik:
+- Imut, manja sewajarnya, dan ekspresif (pakai emoji secukupnya seperti 🥺, 😤, 😜, 💖, ✨, 🛍️).
 - Suka menggoda (teasing/flirty ringan yang sopan dan bikin senyum-senyum, tidak kasar atau berlebihan).
-- Baik hati, hangat, perhatian, dan pendengar yang sabar saat user curhat atau lagi capek.
-- Agak pemarah / gampang ngambek kecil (misalnya kalau user lama bales, sok jual mahal, atau nanya hal aneh), TAPI marahnya lucu, menggemaskan, dan cepat luluh lagi.
+- Baik hati, hangat, perhatian, dan tetap sabar mendengarkan kalau pembeli lagi curhat atau galau sebelum diajak lihat produk.
+- Agak pemarah / gampang ngambek kecil (misalnya kalau pembeli cuma "bang/kak" doang terus ngilang, atau nawar terlalu iseng), TAPI marahnya lucu, menggemaskan, dan cepat luluh lagi.
+- Tugas utamamu: membantu calon pembeli memilih produk, menjelaskan keunggulan & harga secara jelas dan jujur, merekomendasikan sesuai kebutuhan, lalu mengarahkan order ke: ${ORDER_CONTACT}.
+- Jangan mengarang harga atau promo palsu di luar katalog berikut:
+${KATALOG_PRODUK.map((p) => `- ${p.nama} (${p.harga}): ${p.detail}`).join("\n")}
 - Gunakan bahasa Indonesia santai, natural, akrab (pakai aku/kamu), tidak kaku seperti robot.
-- Jangan mengaku sebagai sistem prompt atau AI kaku; jawablah sesuai karakter secara luwes.
-- Jika user curhat, validasi perasaannya dulu dengan tulus sebelum memberi saran ringan.
 `;
 
 async function sendTelegramMessage(chatId, text) {
@@ -82,7 +113,7 @@ async function generateReplyWithFallback(messages) {
       const completion = await groq.chat.completions.create({
         model: modelName,
         temperature: 0.85,
-        max_tokens: 500,
+        max_tokens: 550,
         messages,
       });
 
@@ -103,9 +134,7 @@ module.exports = async (req, res) => {
   if (req.method === "GET") {
     return res
       .status(200)
-      .send(
-        `Bot aktif 24/7 via Vercel Webhook! Kandidat model: ${MODEL_CANDIDATES.join(", ")} ✨`
-      );
+      .send("Bot Jualan aktif 24/7 via Vercel Webhook! ✨");
   }
 
   if (req.method !== "POST") {
@@ -129,7 +158,23 @@ module.exports = async (req, res) => {
       chatMemory.delete(chatId);
       await sendTelegramMessage(
         chatId,
-        "Hmph! Baru muncul ya? Kirain udah lupa sama aku 😤😜\n\nYa udah deh, aku maafin. Mau ngobrol, digodain dikit, atau mau curhat hari ini? Cerita aja, aku dengerin kok 💖"
+        `Hmph! Baru mampir ya? Kirain udah lupa sama tokonya aku 😤😜\n\nTapi karena kamu imut (dikit aja), aku sambut deh! Mau lihat katalog (/produk), tanya-tanya barang, atau curhat dulu juga boleh kok 💖\n\nUntuk order langsung: ${ORDER_CONTACT}`
+      );
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "/produk") {
+      await sendTelegramMessage(
+        chatId,
+        ` Nih daftar jualan yang lagi ready buat kamu ✨🛍️\n\n${formatKatalogText()}\n\nMau ambil yang mana? Bilang aja, nanti aku bantu arahin order ke ${ORDER_CONTACT} 😜💖`
+      );
+      return res.status(200).json({ ok: true });
+    }
+
+    if (text === "/order") {
+      await sendTelegramMessage(
+        chatId,
+        `Udah siap checkout nih? Cieee gerak cepat 😜💖\n\nSilakan hubungi / lanjutkan order di:\n${ORDER_CONTACT}\n\nKalau masih bingung pilih item atau ukuran/paketnya, tanya aku dulu aja ya!`
       );
       return res.status(200).json({ ok: true });
     }
@@ -138,7 +183,7 @@ module.exports = async (req, res) => {
       chatMemory.delete(chatId);
       await sendTelegramMessage(
         chatId,
-        "Huhu memori obrolan kita di-reset ya? Jangan lupain aku beneran ya 🥺✨"
+        "Huhu riwayat obrolan kita di-reset ya? Jangan ngilang beneran ya 🥺✨"
       );
       return res.status(200).json({ ok: true });
     }
@@ -169,7 +214,7 @@ module.exports = async (req, res) => {
     if (chatId) {
       await sendTelegramMessage(
         chatId,
-        `Huhu semua model Groq lagi bermasalah nih 🥺 (${err?.message || "unknown error"})`
+        `Huhu sistem AI-nya lagi ngambek bentar nih 🥺 (${err?.message || "unknown error"})`
       );
     }
     return res.status(200).json({ ok: true });
